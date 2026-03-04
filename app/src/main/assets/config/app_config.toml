@@ -1,0 +1,17 @@
+[model]
+path = "/data/user/0/com.example.rwkvnotes/files/models/RWKV-7-World-0.1B-v3-int8.bin"
+max_tokens = 256
+context_window_tokens = 2048
+temperature = 0.7
+top_p = 0.9
+
+[prompt]
+system = "You are a CS student assistant. Restructure this text into Markdown and tags."
+boss_data_snippet = "Distributed systems, computer architecture, machine learning engineering."
+
+[tagging]
+max_tags = 8
+default_tags = ["notes", "rwkv", "local-ai"]
+
+[cache]
+max_entries = 64

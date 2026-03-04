@@ -1,0 +1,41 @@
+# Android / IntelliJ
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+captures/
+
+# Signing / secrets
+*.jks
+*.keystore
+keystore.properties
+.env
+
+# Native / CMake intermediates
+**/.cxx/
+**/cmake-build-*/
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+
+# Python / tooling noise
+__pycache__/
+*.pyc
+
+# Model artifacts (never commit large weights)
+models/
+**/models/
+*.pth
+*.pt
+*.st
+*.bin
+*.gguf
+*.safetensors
+*.onnx
+
+# Local assistant artifacts
+.cursor/
+plans/
