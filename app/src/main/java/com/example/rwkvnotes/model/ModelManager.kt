@@ -28,7 +28,13 @@ interface ModelManager {
     val models: StateFlow<List<ModelDescriptor>>
     val runtimeState: StateFlow<ModelRuntimeState>
     suspend fun refreshLocalModels()
-    suspend fun downloadModel(modelName: String, url: String, expectedSha256: String? = null): ModelDownloadProgress
+    suspend fun downloadModel(
+        modelName: String,
+        primaryUrl: String,
+        mirrorUrls: List<String> = emptyList(),
+        expectedSha256: String? = null,
+        maxRetriesPerSource: Int = 3,
+    ): ModelDownloadProgress
     suspend fun switchModel(path: String): Boolean
     suspend fun warmup(): Boolean
     fun activeModelPath(): String

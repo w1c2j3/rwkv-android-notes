@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.rwkvnotes.ai.AiProcessor
 import com.example.rwkvnotes.ai.AiService
+import com.example.rwkvnotes.ai.ModelEngineReloader
 import com.example.rwkvnotes.config.AppConfig
 import com.example.rwkvnotes.config.AppConfigLoader
 import com.example.rwkvnotes.data.local.AppDatabase
@@ -49,6 +50,10 @@ abstract class AppBindsModule {
     @Binds
     @Singleton
     abstract fun bindAiProcessor(service: AiService): AiProcessor
+
+    @Binds
+    @Singleton
+    abstract fun bindModelEngineReloader(service: AiService): ModelEngineReloader
 
     @Binds
     @Singleton

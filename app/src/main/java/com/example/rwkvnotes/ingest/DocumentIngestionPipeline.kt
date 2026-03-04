@@ -21,40 +21,45 @@ data class IngestedDocument(
 class DocumentIngestionPipeline @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    suspend fun ingest(uri: Uri): Result<IngestedDocument> {
-        return runCatching {
-            val resolver = context.contentResolver
-            val fileName = resolver.query(uri, null, null, null, null)?.use { cursor ->
-                val index = cursor.getColumnIndex("_display_name")
-                if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
-            } ?: "unknown"
-            val mime = resolver.getType(uri).orEmpty()
-            val ext = fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)
-            val text = when {
-                mime.contains("pdf") || ext == "pdf" -> parsePdf(uri)
-                mime.contains("word") || ext == "docx" -> parseDocx(uri)
-                ext == "md" || ext == "markdown" || mime.contains("markdown") -> parseUtf8(uri)
-                ext == "tex" || mime.contains("tex") -> parseLatex(uri)
-                else -> parseUtf8(uri)
-            }
-            IngestedDocument(fileName = fileName, mediaType = mime, plainText = text.trim())
+    suspend fun ingest(uri: Uri): IngestedDocument {
+        val resolver = context.contentResolver
+        val fileName = resolver.query(uri, null, null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex("_display_name")
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        } ?: throw IllegalArgumentException("missing file display name")
+        val mime = resolver.getType(uri).orEmpty()
+        val ext = fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+        val text = when {
+            mime.contains("pdf") || ext == "pdf" -> parsePdf(uri)
+            mime.contains("word") || ext == "docx" -> parseDocx(uri)
+            ext == "md" || ext == "markdown" || mime.contains("markdown") -> parseUtf8(uri)
+            ext == "tex" || mime.contains("tex") -> parseLatex(uri)
+            ext in setOf("txt", "json", "log", "csv") -> parseUtf8(uri)
+            else -> throw IllegalArgumentException("unsupported file type: $fileName ($mime)")
         }
+        val normalized = text.trim()
+        require(normalized.isNotBlank()) { "parsed text is empty" }
+        return IngestedDocument(fileName = fileName, mediaType = mime, plainText = normalized)
     }
 
     private fun parseUtf8(uri: Uri): String {
-        return context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
+        val stream = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("cannot open file uri")
+        return stream.bufferedReader().use { it.readText() }
     }
 
     private fun parsePdf(uri: Uri): String {
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return ""
-        if (bytes.isEmpty()) return ""
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw IllegalArgumentException("cannot open pdf uri")
+        require(bytes.isNotEmpty()) { "pdf content is empty" }
         PDDocument.load(bytes).use { doc ->
             return PDFTextStripper().getText(doc)
         }
     }
 
     private fun parseDocx(uri: Uri): String {
-        val input = context.contentResolver.openInputStream(uri) ?: return ""
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("cannot open docx uri")
         return extractDocxText(input)
     }
 
@@ -94,5 +99,5 @@ private fun extractDocxText(input: InputStream): String {
             entry = zip.nextEntry
         }
     }
-    return ""
+    throw IllegalArgumentException("word/document.xml not found in docx")
 }

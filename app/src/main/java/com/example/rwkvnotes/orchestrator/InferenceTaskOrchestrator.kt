@@ -25,6 +25,7 @@ class InferenceTaskOrchestrator @Inject constructor(
     val metricsService: InferenceMetricsService,
 ) {
     fun runFromText(text: String): Flow<OrchestratorEvent> = flow {
+        require(text.isNotBlank()) { "input text is blank" }
         val startedAt = System.currentTimeMillis()
         metricsService.reset()
         emit(OrchestratorEvent.Started(source = "text", rawInput = text))
@@ -58,7 +59,7 @@ class InferenceTaskOrchestrator @Inject constructor(
 
     fun runFromUri(uri: Uri): Flow<OrchestratorEvent> = flow {
         emit(OrchestratorEvent.Started(source = "file", rawInput = ""))
-        val ingested = ingestion.ingest(uri).getOrElse {
+        val ingested = runCatching { ingestion.ingest(uri) }.getOrElse {
             emit(OrchestratorEvent.Failed(it.message ?: "failed to parse file"))
             return@flow
         }

@@ -4,7 +4,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.rwkvnotes.ai.protocol.InferenceEvent
-import com.example.rwkvnotes.model.ModelManager
+import com.example.rwkvnotes.model.ModelDescriptor
+import com.example.rwkvnotes.model.ModelTaskScheduler
 import com.example.rwkvnotes.obs.InferenceMetrics
 import com.example.rwkvnotes.orchestrator.InferenceTaskOrchestrator
 import com.example.rwkvnotes.orchestrator.OrchestratorEvent
@@ -42,13 +43,15 @@ data class NoteUiState(
     val activeModelPath: String = "",
     val mmapReadable: Boolean = false,
     val lastWarmupSuccess: Boolean = false,
+    val models: List<ModelDescriptor> = emptyList(),
+    val modelActionMessage: String? = null,
 )
 
 @HiltViewModel
 class NoteViewModel @Inject constructor(
     private val orchestrator: InferenceTaskOrchestrator,
     private val noteRepository: NoteRepository,
-    private val modelManager: ModelManager,
+    private val modelTaskScheduler: ModelTaskScheduler,
     private val semanticIndexService: SemanticIndexService,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(NoteUiState())
@@ -75,8 +78,8 @@ class NoteViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            modelManager.refreshLocalModels()
-            modelManager.runtimeState.collectLatest { runtime ->
+            modelTaskScheduler.refreshModels()
+            modelTaskScheduler.runtimeState.collectLatest { runtime ->
                 _uiState.update {
                     it.copy(
                         activeModelPath = runtime.activeModelPath,
@@ -84,6 +87,11 @@ class NoteViewModel @Inject constructor(
                         lastWarmupSuccess = runtime.lastWarmupSuccess,
                     )
                 }
+            }
+        }
+        viewModelScope.launch {
+            modelTaskScheduler.models.collectLatest { models ->
+                _uiState.update { it.copy(models = models) }
             }
         }
         viewModelScope.launch {
@@ -99,33 +107,14 @@ class NoteViewModel @Inject constructor(
 
     fun runRestructure() {
         val input = _uiState.value.inputText.trim()
-        if (input.isBlank()) return
+        if (input.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "input text is blank") }
+            throw IllegalArgumentException("input text is blank")
+        }
         runFromText(input)
     }
 
     fun runFromUri(uri: Uri) {
-        inferenceJob?.cancel()
-        inferenceJob = viewModelScope.launch {
-            orchestrator.cancel()
-            streamingBuffer.clear()
-            runningRawInput = input
-            _uiState.update {
-                it.copy(
-                    isRunning = true,
-                    errorMessage = null,
-                    streamingText = "",
-                    lastMarkdown = "",
-                    lastTags = emptyList(),
-                    currentScreen = AppScreen.STREAM,
-                )
-            }
-            orchestrator.runFromUri(uri).collectLatest { event ->
-                handleOrchestratorEvent(event, "")
-            }
-        }
-    }
-
-    private fun runFromText(input: String) {
         inferenceJob?.cancel()
         inferenceJob = viewModelScope.launch {
             orchestrator.cancel()
@@ -141,9 +130,33 @@ class NoteViewModel @Inject constructor(
                     currentScreen = AppScreen.STREAM,
                 )
             }
+            orchestrator.runFromUri(uri).collectLatest { event ->
+                handleOrchestratorEvent(event, "")
+            }
+            inferenceJob = null
+        }
+    }
+
+    private fun runFromText(input: String) {
+        inferenceJob?.cancel()
+        inferenceJob = viewModelScope.launch {
+            orchestrator.cancel()
+            streamingBuffer.clear()
+            runningRawInput = input
+            _uiState.update {
+                it.copy(
+                    isRunning = true,
+                    errorMessage = null,
+                    streamingText = "",
+                    lastMarkdown = "",
+                    lastTags = emptyList(),
+                    currentScreen = AppScreen.STREAM,
+                )
+            }
             orchestrator.runFromText(input).collectLatest { event ->
                 handleOrchestratorEvent(event, input)
             }
+            inferenceJob = null
         }
     }
 
@@ -161,6 +174,7 @@ class NoteViewModel @Inject constructor(
                         errorMessage = event.message,
                     )
                 }
+                throw IllegalStateException(event.message)
             }
             is OrchestratorEvent.Model -> when (val modelEvent = event.event) {
                 is InferenceEvent.Token -> {
@@ -187,6 +201,7 @@ class NoteViewModel @Inject constructor(
                             errorMessage = "${modelEvent.error.code}: ${modelEvent.error.message}",
                         )
                     }
+                    throw IllegalStateException("${modelEvent.error.code}: ${modelEvent.error.message}")
                 }
             }
         }
@@ -203,7 +218,30 @@ class NoteViewModel @Inject constructor(
     }
 
     fun warmupModel() {
-        viewModelScope.launch { modelManager.warmup() }
+        viewModelScope.launch {
+            val ok = modelTaskScheduler.warmupModel()
+            _uiState.update { it.copy(modelActionMessage = if (ok) "warmup success" else "warmup failed") }
+        }
+    }
+
+    fun refreshModels() {
+        viewModelScope.launch {
+            modelTaskScheduler.refreshModels()
+            _uiState.update { it.copy(modelActionMessage = "model list refreshed") }
+        }
+    }
+
+    fun switchModel(path: String) {
+        viewModelScope.launch {
+            runCatching { modelTaskScheduler.switchModel(path) }
+                .onSuccess {
+                    _uiState.update { state -> state.copy(modelActionMessage = "switched to: $path") }
+                }
+                .onFailure {
+                    _uiState.update { state -> state.copy(modelActionMessage = it.message ?: "switch failed") }
+                    throw it
+                }
+        }
     }
 
     override fun onCleared() {

@@ -7,7 +7,6 @@ import com.example.rwkvnotes.ai.protocol.NativeFinalEnvelopeJson
 import com.example.rwkvnotes.ai.protocol.InferenceRequestJson
 import com.example.rwkvnotes.ai.protocol.TokenChunkJson
 import com.example.rwkvnotes.config.AppConfig
-import com.example.rwkvnotes.model.ModelManager
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -28,8 +27,7 @@ class AiService @Inject constructor(
     private val appConfig: AppConfig,
     private val json: Json,
     private val nativeBridge: NativeRwkvBridge,
-    private val modelManager: ModelManager,
-) : AiProcessor {
+) : AiProcessor, ModelEngineReloader {
     private val promptAssembler = PromptAssembler()
     private var engineHandle: Long = nativeBridge.initEngine(json.encodeToString(appConfig))
     private var boundModelPath: String = appConfig.model.path
@@ -51,17 +49,6 @@ class AiService @Inject constructor(
                 emit(InferenceEvent.Failed(ErrorJson("engine_shutdown", "native engine has been destroyed")))
             }
         }
-        synchronized(stateLock) {
-            val currentModel = modelManager.activeModelPath()
-            if (currentModel != boundModelPath) {
-                if (engineHandle > 0L) {
-                    nativeBridge.destroyEngine(engineHandle)
-                }
-                val refreshedConfig = appConfig.copy(model = appConfig.model.copy(path = currentModel))
-                engineHandle = nativeBridge.initEngine(json.encodeToString(refreshedConfig))
-                boundModelPath = currentModel
-            }
-        }
         if (engineHandle <= 0L) {
             return flow {
                 emit(
@@ -72,6 +59,7 @@ class AiService @Inject constructor(
             }
         }
         val normalizedInput = userText.trim()
+        require(normalizedInput.isNotBlank()) { "input text is blank" }
         val cached = synchronized(cacheLock) { resultCache[normalizedInput] }
         if (cached != null) {
             return flow { emit(InferenceEvent.Completed(cached)) }
@@ -83,7 +71,7 @@ class AiService @Inject constructor(
                     userText = normalizedInput,
                     contextWindowTokens = appConfig.model.contextWindowTokens,
                 ),
-                modelPath = appConfig.model.path,
+                modelPath = boundModelPath,
                 maxTokens = appConfig.model.maxTokens,
                 temperature = appConfig.model.temperature,
                 topP = appConfig.model.topP,
@@ -154,5 +142,23 @@ class AiService @Inject constructor(
         if (engineHandle > 0L) nativeBridge.destroyEngine(engineHandle)
         engineHandle = 0L
         isShutdown = true
+    }
+
+    override suspend fun reloadEngine(modelPath: String): Boolean {
+        require(modelPath.isNotBlank()) { "modelPath is blank" }
+        synchronized(stateLock) {
+            if (isShutdown) return false
+            activeJob?.cancel()
+            activeJob = null
+            if (engineHandle > 0L) {
+                nativeBridge.cancelInference(engineHandle)
+                nativeBridge.destroyEngine(engineHandle)
+            }
+            val refreshedConfig = appConfig.copy(model = appConfig.model.copy(path = modelPath))
+            engineHandle = nativeBridge.initEngine(json.encodeToString(refreshedConfig))
+            boundModelPath = modelPath
+            synchronized(cacheLock) { resultCache.clear() }
+            return engineHandle > 0L
+        }
     }
 }

@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomAppBar
@@ -131,6 +132,8 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding),
                             state = state,
                             onWarmup = viewModel::warmupModel,
+                            onRefreshModels = viewModel::refreshModels,
+                            onSwitchModel = viewModel::switchModel,
                         )
                         AppScreen.SETTINGS -> SettingsScreen(
                             modifier = Modifier.padding(innerPadding),
@@ -320,6 +323,8 @@ private fun ModelScreen(
     modifier: Modifier,
     state: com.example.rwkvnotes.note.NoteUiState,
     onWarmup: () -> Unit,
+    onRefreshModels: () -> Unit,
+    onSwitchModel: (String) -> Unit,
 ) {
     Column(modifier = modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(shape = RoundedCornerShape(16.dp)) {
@@ -327,7 +332,29 @@ private fun ModelScreen(
                 Text("Active Path: ${state.activeModelPath}", style = MaterialTheme.typography.bodySmall)
                 Text("mmap readable: ${state.mmapReadable}")
                 Text("warmup success: ${state.lastWarmupSuccess}")
-                Button(onClick = onWarmup) { Text("预热模型") }
+                if (state.modelActionMessage != null) {
+                    Text(state.modelActionMessage, style = MaterialTheme.typography.labelSmall)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onWarmup) { Text("预热模型") }
+                    Button(onClick = onRefreshModels) { Text("刷新列表") }
+                }
+            }
+        }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            itemsIndexed(state.models) { _, model ->
+                Card(shape = RoundedCornerShape(12.dp)) {
+                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(model.name, style = MaterialTheme.typography.titleSmall)
+                        Text(model.path, style = MaterialTheme.typography.bodySmall)
+                        Text("size: ${model.sizeBytes}", style = MaterialTheme.typography.labelSmall)
+                        if (!model.isActive) {
+                            Button(onClick = { onSwitchModel(model.path) }) { Text("切换") }
+                        } else {
+                            Text("当前模型", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
             }
         }
     }
