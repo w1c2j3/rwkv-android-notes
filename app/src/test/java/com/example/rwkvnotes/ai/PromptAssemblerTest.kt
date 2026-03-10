@@ -17,10 +17,10 @@ class PromptAssemblerTest {
             contextWindowTokens = 2048,
         )
 
-        assertTrue(prompt.contains("Instruction: You are a CS student assistant."))
+        assertTrue(prompt.contains("Instruction: system prompt"))
         assertTrue(prompt.contains("glossary terms"))
         assertTrue(prompt.contains("raw note"))
-        assertTrue(prompt.contains("Output (in strict Markdown):"))
+        assertTrue(prompt.contains("Tags: tag1, tag2, tag3"))
     }
 
     @Test

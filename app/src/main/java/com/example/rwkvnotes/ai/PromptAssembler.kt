@@ -8,6 +8,9 @@ class PromptAssembler {
         userText: String,
         contextWindowTokens: Int,
     ): String {
+        val systemPrompt = promptConfig.system.trim().ifBlank {
+            "You are a CS student assistant. Restructure the input into Markdown and append a final Tags line."
+        }
         val glossary = promptConfig.bossDataSnippet.trim()
         val trimmedInput = userText.trim()
         val contextCharsBudget = (contextWindowTokens.coerceAtLeast(256)) * 3
@@ -23,12 +26,14 @@ class PromptAssembler {
             "$prefix\n...[TRUNCATED_MIDDLE]...\n$suffix"
         }
         return """
-        Instruction: You are a CS student assistant. Restructure the input text into a Markdown format with hierarchical headings, bullet points, and extract 3-5 relevant tags at the end.
+        Instruction: $systemPrompt
         Glossary to consider: $glossary
         
         Input:
         $inputForPrompt
-        Output (in strict Markdown):
+        Output rules:
+        1. Return Markdown only for the main body.
+        2. Put tags on the last line using `Tags: tag1, tag2, tag3`.
         """.trimIndent()
     }
 }

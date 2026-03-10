@@ -1,9 +1,32 @@
 [model]
-path = "/data/user/0/com.example.rwkvnotes/files/models/RWKV-7-World-0.1B-v3-int8.bin"
+path = "/data/user/0/com.example.rwkvnotes/files/models/rwkv-notes-runtime.bin"
+runtime_extension = ".bin"
 max_tokens = 256
 context_window_tokens = 2048
 temperature = 0.7
 top_p = 0.9
+
+[model_download]
+file_name = "rwkv-notes-runtime.bin"
+primary_url = ""
+mirror_urls = []
+expected_sha256 = ""
+max_retries_per_source = 3
+
+[infer_equation]
+h_decay = 0.62
+x_mix = 0.18
+o_mix = 0.20
+att_base_decay = 0.92
+att_decay_scale = 0.07
+window_size = 192
+proj_fan_in = 8
+
+[infer_sampling]
+top_k = 40
+repeat_penalty = 1.10
+
+# 在上线配置中填入真正的 runtime format 下载地址与 sha256，不能使用 `.pth`
 
 [prompt]
 system = "You are a CS student assistant. Restructure this text into Markdown and tags."

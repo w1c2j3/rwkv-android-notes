@@ -13,16 +13,40 @@ class AppConfigLoader @Inject constructor(
         val text = context.assets.open("config/app_config.toml").bufferedReader().use { it.readText() }
         val parsed = parseTomlText(text)
         val model = parsed["model"].orEmpty()
+        val modelDownload = parsed["model_download"].orEmpty()
+        val inferEquation = parsed["infer_equation"].orEmpty()
+        val inferSampling = parsed["infer_sampling"].orEmpty()
         val prompt = parsed["prompt"].orEmpty()
         val tagging = parsed["tagging"].orEmpty()
         val cache = parsed["cache"].orEmpty()
         return AppConfig(
             model = ModelConfig(
                 path = model["path"].orEmpty(),
+                runtimeExtension = model["runtime_extension"].orEmpty().ifBlank { ".bin" },
                 maxTokens = model["max_tokens"]?.toIntOrNull() ?: 256,
                 contextWindowTokens = model["context_window_tokens"]?.toIntOrNull() ?: 2048,
                 temperature = model["temperature"]?.toDoubleOrNull() ?: 0.7,
                 topP = model["top_p"]?.toDoubleOrNull() ?: 0.9,
+            ),
+            modelDownload = ModelDownloadConfig(
+                fileName = modelDownload["file_name"].orEmpty(),
+                primaryUrl = modelDownload["primary_url"].orEmpty(),
+                mirrorUrls = parseArray(modelDownload["mirror_urls"]),
+                expectedSha256 = modelDownload["expected_sha256"]?.ifBlank { null },
+                maxRetriesPerSource = modelDownload["max_retries_per_source"]?.toIntOrNull() ?: 3,
+            ),
+            inferEquation = InferEquationConfig(
+                hDecay = inferEquation["h_decay"]?.toDoubleOrNull() ?: 0.62,
+                xMix = inferEquation["x_mix"]?.toDoubleOrNull() ?: 0.18,
+                oMix = inferEquation["o_mix"]?.toDoubleOrNull() ?: 0.20,
+                attBaseDecay = inferEquation["att_base_decay"]?.toDoubleOrNull() ?: 0.92,
+                attDecayScale = inferEquation["att_decay_scale"]?.toDoubleOrNull() ?: 0.07,
+                windowSize = inferEquation["window_size"]?.toIntOrNull() ?: 192,
+                projFanIn = inferEquation["proj_fan_in"]?.toIntOrNull() ?: 8,
+            ),
+            inferSampling = InferSamplingConfig(
+                topK = inferSampling["top_k"]?.toIntOrNull() ?: 40,
+                repeatPenalty = inferSampling["repeat_penalty"]?.toDoubleOrNull() ?: 1.10,
             ),
             prompt = PromptConfig(
                 system = prompt["system"].orEmpty(),

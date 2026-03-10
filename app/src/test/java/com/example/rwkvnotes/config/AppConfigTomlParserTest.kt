@@ -9,6 +9,7 @@ class AppConfigTomlParserTest {
         val toml = """
             [model]
             path = "/tmp/model.bin"
+            runtime_extension = ".bin"
             max_tokens = 128
             
             [prompt]
@@ -18,6 +19,7 @@ class AppConfigTomlParserTest {
         val result = parseTomlText(toml)
 
         assertEquals("/tmp/model.bin", result["model"]?.get("path"))
+        assertEquals(".bin", result["model"]?.get("runtime_extension"))
         assertEquals("128", result["model"]?.get("max_tokens"))
         assertEquals("sys", result["prompt"]?.get("system"))
     }

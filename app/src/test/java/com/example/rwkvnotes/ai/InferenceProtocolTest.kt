@@ -22,6 +22,8 @@ class InferenceProtocolTest {
             maxTokens = 32,
             temperature = 0.8,
             topP = 0.95,
+            topK = 32,
+            repeatPenalty = 1.1,
             stream = true,
         )
 
@@ -50,11 +52,11 @@ class InferenceProtocolTest {
     fun finalEnvelope_error_round_trip() {
         val envelope = NativeFinalEnvelopeJson(
             ok = false,
-            error = ErrorJson("invalid_request_json", "request missing prompt"),
+            error = ErrorJson("REQUEST_JSON_INVALID", "request missing prompt"),
         )
         val encoded = json.encodeToString(envelope)
         val decoded = json.decodeFromString<NativeFinalEnvelopeJson>(encoded)
         assertTrue(!decoded.ok)
-        assertEquals("invalid_request_json", decoded.error?.code)
+        assertEquals("REQUEST_JSON_INVALID", decoded.error?.code)
     }
 }
